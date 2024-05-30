@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, TextInput, Button, FlatList, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TextInput, FlatList, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import axios from 'axios';
 import { Icon } from 'react-native-elements';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,7 +11,6 @@ export default function SearchScreen({ navigation }) {
   const [favorites, setFavorites] = useState([]);
 
   useEffect(() => {
-    // Function to load favorites from AsyncStorage during the initial screen load
     const loadFavorites = async () => {
       const storedFavorites = await AsyncStorage.getItem('favorites');
       if (storedFavorites) {
@@ -21,32 +20,37 @@ export default function SearchScreen({ navigation }) {
     loadFavorites();
   }, []);
 
-  const search = async () => {
-    try {
-      // Performs an HTTP GET request to the iTunes API to search for artists or tracks based on the user's query
-      const response = await axios.get(`https://itunes.apple.com/search?term=${query}`);
-      setResults(response.data.results);
-    } catch (error) {
-      console.error(error);
-    }
-  };
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (query.trim() !== '') {
+        try {
+          const response = await axios.get(`https://itunes.apple.com/search?term=${query}`);
+          setResults(response.data.results);
+        } catch (error) {
+          console.error(error);
+        }
+      } else {
+        setResults([]);
+      }
+    };
+
+    const debounceFetch = setTimeout(fetchResults, 300);
+
+    return () => clearTimeout(debounceFetch);
+  }, [query]);
 
   const toggleFavorite = async (item) => {
     let updatedFavorites;
     if (favorites.some(favorite => favorite.trackId === item.trackId)) {
-      // If the item is already in favorites, remove it from the favorites list
       updatedFavorites = favorites.filter(favorite => favorite.trackId !== item.trackId);
     } else {
-      // Otherwise, add the item to the favorites list
       updatedFavorites = [...favorites, item];
     }
     setFavorites(updatedFavorites);
-    // Save the updated favorites to AsyncStorage
     await AsyncStorage.setItem('favorites', JSON.stringify(updatedFavorites));
   };
 
   const navigateToLadder = () => {
-    // Navigate to the "Ladder" screen
     navigation.navigate('Ladder');
   };
 
@@ -59,23 +63,24 @@ export default function SearchScreen({ navigation }) {
         onChangeText={setQuery}
       />
       <View style={styles.buttonContainer}>
-        <Button title="Search" onPress={search} />
+        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Favorites')}>
+          <Text style={styles.buttonText}>View Favorites</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.buttonContainer}>
-        <Button title="View Favorites" onPress={() => navigation.navigate('Favorites')} />
-      </View>
-      <View style={styles.buttonContainer}>
-        <Button title="Ladder Song" onPress={navigateToLadder} />
+        <TouchableOpacity style={styles.button} onPress={navigateToLadder}>
+          <Text style={styles.buttonText}>Ladder Song</Text>
+        </TouchableOpacity>
       </View>
       <FlatList
         data={results}
-        keyExtractor={(item) => item.trackId.toString()}
+        keyExtractor={(item) => (item.trackId ? item.trackId.toString() : item.collectionId.toString())}
         renderItem={({ item }) => {
           const isFavorite = favorites.some(favorite => favorite.trackId === item.trackId);
           return (
             <Animatable.View animation="fadeIn" duration={800} style={styles.itemContainer}>
               <TouchableOpacity onPress={() => navigation.navigate('Detail', { item })} style={styles.itemTextContainer}>
-                <Text style={styles.itemText}>{item.trackName} by {item.artistName}</Text>
+                <Text style={styles.itemText}>{item.trackName ? `${item.trackName} by ${item.artistName}` : item.collectionName}</Text>
               </TouchableOpacity>
               <Icon
                 name={isFavorite ? 'heart' : 'heart-o'}
@@ -103,6 +108,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 20,
     paddingLeft: 10,
+    borderRadius: 5,
   },
   itemContainer: {
     flexDirection: 'row',
@@ -126,5 +132,15 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#6200EE',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
   },
 });
